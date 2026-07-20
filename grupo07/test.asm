@@ -1,0 +1,1931 @@
+; **********************************************************************
+; *		Projeto IAC 2021/2022
+; *		“CHUVA DE METEOROS”
+; * 	
+; *Grupo 07:
+; *	
+; *		Sofia Du -> ist1104195
+; *		Tiago Louro -> ist1104101
+; *		Ricardo Horta -> ist1103188
+; *
+; **********************************************************************
+
+; **********************************************************************
+; * Constantes
+; **********************************************************************
+
+;comandos de escrita do MediaCenter
+DEFINE_LINHA    		EQU 600AH       ; endereço do comando para definir a linha
+DEFINE_COLUNA   		EQU 600CH       ; endereço do comando para definir a coluna
+DEFINE_PIXEL    		EQU 6012H       ; endereço do comando para escrever um pixel
+APAGA_AVISO     		EQU 6040H       ; endereço do comando para apagar o aviso de nenhum cenário selecionado
+APAGA_ECRÃ	 			EQU 6002H      	; endereço do comando para apagar todos os pixels já desenhados
+SELECIONA_CENARIO_FUNDO EQU 6042H       ; endereço do comando para selecionar uma imagem de fundo
+SOUND_EFFECT			EQU 605AH	   	; endereço do comando para reproduzir um sound effect
+
+;dimensoes dos objetos
+LARGURA		EQU 5							;largura do objeto
+ALTURA		EQU 5							;altura do objeto
+
+;cores utilizadas 
+;nave
+VERMELHO		EQU 0FF00H				; valor hexadecimal da cor vermelho
+CINZENTO_ESCURO EQU 0F666H				; valor hexadecimal da cor cinzento escuro
+CINZENTO_CLARO	EQU	0F888H  			; valor hexadecimal da cor cinzento claro
+
+;meteoro
+CINZENTO_TRANSP		EQU	0AFFFH			; valor hexadecimal da cor cinzento transparente    
+VERDE_TRANSP        EQU 0AFF0H			 ;valor hexadecimal da cor verde transparente                                                               
+CASTANHO_CLARO		EQU 0F887H			; valor hexadecimal da cor castanho claro
+AZUL				EQU 0F19fH			; valor hexadecimal da cor azul
+AZUL_ESCURO 	EQU 0F48cH			; valor hexadecimal da cor castanho escuro
+AZUL_CLARO 			EQU 0F68cH			; valor hexadecimal da cor azul claro
+PRETO EQU 0F000H	
+
+
+;posicao da nave (inicial)
+LINHA_DA_NAVE        	EQU  27			; linha onde a nave começa
+COLUNA_DA_NAVE			EQU  30			; coluna onde a nave começa (a meio do ecrã)
+
+;posicao da meteoro (inicial)
+LINHA_DO_METEORO			EQU 0		; linha onde o meteoro começa
+COLUNA_METEORO_1			EQU	8
+COLUNA_METEORO_2			EQU	24
+COLUNA_METEORO_3			EQU	40
+COLUNA_METEORO_4			EQU	56
+
+;missil
+ALCANCE_MISSIL	EQU	12
+
+;dimensao do ecrã onde o projeto vai correr                                      ?????????????? nao sei se fica bem
+MIN_LINHA		EQU	 0					; menor número da linha que o objeto pode ocupar
+MAX_LINHA		EQU  32					; maior número da linha que o objeto pode ocupar
+MIN_COLUNA		EQU  0					; número da coluna mais à esquerda que o objeto pode ocupar
+MAX_COLUNA		EQU  64        			; número da coluna mais à direita que o objeto pode ocupar
+
+;atrasos utilizados
+ATRASO	   EQU 	5F00H   ; atraso para limitar a velocidade de movimento do boneco
+ATRASO_IMAGENS	EQU	0FFFFH	; atraso das imagens do slideshow ao iniciar o jogo
+
+;display de energia
+DISPLAY   EQU 0A000H  ; endereço dos displays de 7 segmentos (periférico POUT-1)
+DISPLAY_INICIAL EQU  64H ; valor inicial do display de energia
+TEC_LIN    EQU 0C000H  ; endereço das linhas do teclado (periférico POUT-2)
+TEC_COL    EQU 0E000H  ; endereço das colunas do teclado (periférico PIN)
+LINHA	   EQU 08H       ; linha a testar (4ª linha, 1000b)
+MASCARA    EQU 0FH     ; para isolar os 4 bits de menor peso, ao ler as colunas do teclado
+MASCARA_1	EQU	01H		; para testar se o número é ímpar ou par
+
+;teclas utilizadas		
+TECLA_0	EQU 11H
+TECLA_1 EQU 12H
+TECLA_2 EQU 14H
+TECLA_C	EQU 81H
+TECLA_D	EQU 82H
+TECLA_E EQU 84H
+
+
+; **********************************************************************
+; * Zona de Dados
+; **********************************************************************
+
+PLACE		1000H				
+
+DEF_NAVE:		; tabela que define a nave(cor, largura, pixels)
+	WORD		LINHA_DA_NAVE
+	WORD		COLUNA_DA_NAVE	
+	WORD		LARGURA
+	WORD		ALTURA
+	WORD		VERMELHO, 0, 0, 0, VERMELHO
+	WORD		CINZENTO_CLARO, 0, VERMELHO, 0, CINZENTO_CLARO
+	WORD		CINZENTO_CLARO, CINZENTO_CLARO, CINZENTO_CLARO, CINZENTO_CLARO, CINZENTO_CLARO
+	WORD		CINZENTO_ESCURO, CINZENTO_CLARO, CINZENTO_CLARO, CINZENTO_CLARO, CINZENTO_ESCURO
+	WORD		0, CINZENTO_ESCURO, CINZENTO_ESCURO, CINZENTO_ESCURO, 0
+
+DEF_MISSIL:
+	WORD		LINHA_DA_NAVE	;devido ao desenho da nave, o missil tem como linha a linha inicial da nave
+	WORD		CINZENTO_CLARO	;cor do missil
+	WORD		0	;houve colisao (1), não houve colisão (0)
+	WORD		ALCANCE_MISSIL	;distancia máxima que o missil percorre (alcance)
+	WORD		0				;coluna do missil
+	
+TABELA_METEOROS:
+	WORD DEF_METEORO_1
+	WORD DEF_METEORO_2
+	WORD DEF_METEORO_3
+	WORD DEF_METEORO_4
+	
+TABELA_DESIGN_METEORO_MAU:
+	WORD	DEF_DESIGN_METEORO_MINI_1
+	WORD	DEF_DESIGN_METEORO_MINI_2
+	WORD	DEF_DESIGN_METEORO_PEQUENO_MAU
+	WORD	DEF_DESIGN_METEORO_MEDIO_MAU
+	WORD	DEF_DESIGN_METEORO_GRANDE_MAU
+
+TABELA_DESIGN_METEORO_BOM:
+	WORD	DEF_DESIGN_METEORO_MINI_1
+	WORD	DEF_DESIGN_METEORO_MINI_2
+	WORD	DEF_DESIGN_METEORO_PEQUENO_BOM
+	WORD	DEF_DESIGN_METEORO_MEDIO_BOM
+	WORD	DEF_DESIGN_METEORO_GRANDE_BOM
+
+DEF_METEORO_1:	; tabela que define a posicao do meteoro
+	WORD		LINHA_DO_METEORO
+	WORD		COLUNA_METEORO_1						;coluna inicial do meteoro
+	WORD		0						;meteoro bom(1), meteoro mau (0)
+	WORD		0						;tamanho do meteoro (de zero a quatro)
+	WORD		0						;se teve colisão com nave ou não	
+	WORD		0						;se teve colisao com missil
+
+DEF_METEORO_2:	; tabela que define a posicao do meteoro
+	WORD		LINHA_DO_METEORO
+	WORD		COLUNA_METEORO_2						;coluna inicial do meteoro
+	WORD		0						;meteoro bom(1), meteoro mau (0)
+	WORD		0						;tamanho do meteoro (de zero a quatro)
+	WORD		0						;se teve colisão com nave ou não	
+	WORD		0						;se teve colisao com missil
+
+DEF_METEORO_3:	; tabela que define a posicao do meteoro
+	WORD		LINHA_DO_METEORO		
+	WORD		COLUNA_METEORO_3						;coluna inicial do meteoro
+	WORD		1						;meteoro bom(1), meteoro mau (0)	
+	WORD		0						;tamanho do meteoro (de zero a quatro)
+	WORD		0						;se teve colisão com nave ou não	
+	WORD		0						;se teve colisao com missil
+	
+DEF_METEORO_4:	; tabela que define a posicao do meteoro
+	WORD		LINHA_DO_METEORO
+	WORD		COLUNA_METEORO_4						;coluna inicial do meteoro
+	WORD		0						;meteoro bom(1), meteoro mau (0)
+	WORD		0						;tamanho do meteoro (de zero a quatro)
+	WORD		0						;se teve colisão com nave ou não	
+	WORD		0						;se teve colisao com missil	
+	
+DEF_DESIGN_METEORO_MINI_1:
+	WORD	1
+	WORD	1
+	WORD	CINZENTO_TRANSP
+	
+DEF_DESIGN_METEORO_MINI_2:
+	WORD	2
+	WORD	2
+	WORD CINZENTO_TRANSP , CINZENTO_TRANSP
+	WORD  CINZENTO_TRANSP , CINZENTO_TRANSP
+
+;A PARTIR DAQUI TEMOS DE DEFINIR OS BONS E MAUS
+
+DEF_DESIGN_METEORO_PEQUENO_MAU:
+	WORD	3
+	WORD	3
+	WORD 0,VERMELHO,0
+	WORD VERMELHO,0,VERMELHO
+	WORD PRETO,0,PRETO
+	
+DEF_DESIGN_METEORO_MEDIO_MAU:
+	WORD	4
+	WORD	4
+	WORD 0,VERMELHO,0,0
+	WORD PRETO,0,VERMELHO,0
+	WORD VERMELHO,0,0,VERMELHO
+	WORD VERMELHO,VERMELHO,PRETO,0
+
+DEF_DESIGN_METEORO_GRANDE_MAU:
+	WORD	LARGURA
+	WORD	ALTURA
+	WORD 0,0,VERMELHO,0,0
+	WORD 0,PRETO,0,PRETO,0
+	WORD VERMELHO,0,0,0,VERMELHO
+	WORD 0,PRETO,0,PRETO,0
+	WORD 0,0,VERMELHO,0,0
+
+DEF_DESIGN_METEORO_PEQUENO_BOM:
+	WORD	3
+	WORD	3
+	WORD 0, VERDE_TRANSP , 0
+	WORD VERDE_TRANSP , VERDE_TRANSP , VERDE_TRANSP
+	WORD 0, VERDE_TRANSP , 0
+	
+DEF_DESIGN_METEORO_MEDIO_BOM:
+	WORD	4
+	WORD	4
+	WORD 0, CASTANHO_CLARO , CASTANHO_CLARO , 0
+	WORD CASTANHO_CLARO , CASTANHO_CLARO ,CASTANHO_CLARO , CASTANHO_CLARO
+	WORD CASTANHO_CLARO , CASTANHO_CLARO ,CASTANHO_CLARO , CASTANHO_CLARO
+	WORD 0, CASTANHO_CLARO , CASTANHO_CLARO , 0
+
+DEF_DESIGN_METEORO_GRANDE_BOM:
+	WORD	LARGURA
+	WORD	ALTURA
+	WORD	0, CASTANHO_CLARO , AZUL , CASTANHO_CLARO , 0 
+	WORD	CASTANHO_CLARO, AZUL_CLARO, AZUL_CLARO,AZUL_CLARO, CASTANHO_CLARO
+	WORD	AZUL, AZUL_CLARO, CASTANHO_CLARO, AZUL_CLARO, AZUL
+	WORD	CASTANHO_CLARO,AZUL_CLARO, AZUL_CLARO, AZUL_CLARO, CASTANHO_CLARO
+	WORD	0, CASTANHO_CLARO, AZUL , CASTANHO_CLARO , 0
+	
+DEF_DESIGN_EXPLOSAO:
+	WORD  LARGURA
+	WORD  ALTURA
+	WORD  VERMELHO, AZUL_CLARO, VERMELHO, AZUL_CLARO, VERMELHO
+	WORD  AZUL_CLARO, VERMELHO, AZUL_CLARO, VERMELHO, AZUL_CLARO
+	WORD  VERMELHO, AZUL_CLARO, VERMELHO, AZUL_CLARO, VERMELHO
+	WORD  AZUL_CLARO, VERMELHO, AZUL_CLARO, VERMELHO, AZUL_CLARO
+	WORD  VERMELHO, AZUL_CLARO, VERMELHO, AZUL_CLARO, VERMELHO
+	
+	
+;VARIÁVEIS
+sentido_rover:
+	WORD	0
+tecla_carregada:
+	WORD	0
+	
+	
+;LOCKS
+lock_rover:
+	LOCK	0
+lock_meteoro:
+	LOCK	0
+lock_estado:
+	LOCK	0
+lock_missil:
+	LOCK	0
+lock_move_missil:
+	LOCK 	0
+lock_verifica_colisoes:
+	LOCK 	0
+	
+	
+;ESTADO DO JOGO
+pre_game:		; o jogo ainda não começou
+	WORD	1
+in_game:		; o jogo está a decorrer
+	WORD	0
+paused:			; o jogo está em pausa
+	WORD	0
+post_game:		; o jogo acabou
+	WORD	0
+muda_estado:	; indica se foi mudado o estado de algum dos de cima
+	WORD	1
+	
+	
+;FLAGS
+flag_descer_meteoro:
+	WORD	0
+flag_falhou_energia:
+	WORD	0
+flag_colisao_nave_meteoro:
+	WORD 	0
+flag_colisao_missil_meteoro:
+	WORD	0
+flag_diminui_display:
+	WORD	0	
+	
+
+;STACKS                espaço reservado para a pilha (100 words -> 200 bytes)
+	STACK 100H 	
+	SP_inicial_main:
+	
+	STACK 100H
+	SP_inicial_rover:
+	
+	STACK 100H
+	SP_inicial_teclado:
+	
+	STACK 100H
+	SP_inicial_meteoro:
+	
+	STACK 100H
+	SP_inicial_missil:
+	
+	STACK 100H
+	SP_inicial_display:
+
+	STACK 100H
+	SP_inicial_colisoes:
+	
+	
+;DISPLAY
+soma_display:
+	WORD 0
+valor_display:
+	WORD	0
+
+
+;TABELA DE INTERRUPÇÕES
+int_table:
+	WORD	int_move_meteoro
+	WORD	int_move_missil
+	WORD	int_desce_display
+	
+	
+; **********************************************************************
+; * Código
+; **********************************************************************
+
+PLACE      0
+	
+inicio:
+	MOV SP, SP_inicial_main ; inicializa SP (stack-point) para a palavra seguinte à ultima na pilha 
+	MOV BTE, int_table	; inicializa a tabela de interrupcoes
+	;	inicialização das interrupções
+	EI0
+	EI1
+	EI2
+	EI
+	; inicialização dos processos usados pelo programa
+	CALL teclado
+	CALL rover
+	CALL meteoros
+	CALL display
+	CALL missil
+	CALL colisoes
+	
+	
+;************************************************************************************
+;Processo main
+;	Este processo vai gerir o estado do jogo (in_game, pre_game, paused, post_game)
+;************************************************************************************
+main:
+	CALL testa_pre_game
+	MOV	R0, [lock_estado]
+	CALL tecla_func_estado
+	CMP R0, 0
+	JZ main
+	MOV R0, [muda_estado]
+	CMP R0, 0
+	JZ main
+	CALL testa_paused
+	CALL testa_in_game
+	CALL testa_post_game
+	JMP main
+
+
+;************************************************************************************
+;testa_pre_game
+;	Esta rotina verifica se o estado do jogo é pre_game (ecrã inicial)
+;************************************************************************************
+testa_pre_game:
+	MOV	R0, [pre_game]
+	CMP	R0, 1
+	JZ	pre_game_on
+	RET
+	
+	
+;************************************************************************************
+;pre_game_on
+;	Esta rotina seleciona o cenário de fundo correspondente ao ecrã inicial do jogo
+;		e espera que a tecla que iniciará o jogo seja premida
+;************************************************************************************
+pre_game_on:
+	MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+    MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+	MOV	R1, 0			                ; cenário de fundo número 0
+    MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	CALL ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+			
+	MOV R3, 0		; escolhe-se o efeito sonoro 
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro 
+			
+	CALL delay_grande
+			
+	CALL espera_C
+	RET
+
+
+;************************************************************************************
+;espera_C
+;	Esta rotina escole como linha e coluna as correspondentes à posicao da tecla C no
+;		teclado e espera que essa tecla seja premida
+;	Se a tecla for premida, é chamada a rotina in_game_on
+;************************************************************************************
+espera_C:
+	MOV R10, 8
+	MOV R11, 1
+	CALL espera_tecla_escolha
+	CALL	tecla_C
+	CALL in_game_on
+	RET
+
+	
+;************************************************************************************
+;tecla_func_estado
+;	Esta rotina verifica se a tecla carregada pertence ao conjunto de teclas com função
+;		atribuída dentro deste processo
+;	Em caso positivo, dá JMP para a respetiva função
+;************************************************************************************
+tecla_func_estado:
+	MOV R0, [tecla_carregada]
+	MOV R1, TECLA_C
+	CMP R0, R1
+	JZ tecla_C
+	MOV R1, TECLA_D
+	CMP R0, R1
+	JZ	tecla_D
+	MOV R1, TECLA_E
+	CMP R0, R1
+	JZ	tecla_E
+	MOV R0, 0
+	JMP return_main
+	
+	
+;************************************************************************************
+;tecla_C
+;	Esta rotina altera o estado do jogo para in_game e dá reset aos dados de todos
+;		os objetos que fazem parte do jogo
+;************************************************************************************
+	tecla_C:
+		MOV R3, 0
+		MOV [pre_game], R3
+		MOV [post_game], R3
+		INC R3
+		MOV	[in_game], R3
+		MOV	[muda_estado], R3
+		CALL reset_meteoros
+		CALL reset_nave
+		CALL reset_display_energia
+		JMP return_main
+
+
+;************************************************************************************
+;tecla_D
+;	Esta rotina verifica se o jogo está em pausa ou não
+;	A funcão inverte o resultado que obteve (tira da pausa se estiver pausado e 
+;		pausa se não estiver)
+;************************************************************************************
+	tecla_D:
+		MOV R1, [paused]
+		CMP R1, 0
+		JZ pause_game
+		JMP	resume
+
+
+;************************************************************************************
+;pause_game
+;	Esta rotina trata de pausar o jogo
+;************************************************************************************
+		pause_game:
+			MOV R1, 0
+			MOV [in_game], R1
+			MOV	R1, 1
+			MOV [paused], R1
+			MOV [muda_estado], R1
+			MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+			MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+			MOV	R1, 7			               ; cenário de fundo número 7
+			MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+			
+			CALL ciclo_atraso_imagens_ecra
+			CALL ciclo_atraso_imagens_ecra
+			
+			MOV R3, 5		; escolhe-se o efeito sonoro 
+			MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro 
+			
+			CALL delay_grande
+			
+			JMP return_main
+			
+			
+;************************************************************************************
+;resume
+;	Esta rotina altera o estado do jogo para in_game 
+;************************************************************************************
+		resume:
+			MOV R1, 0
+			MOV [paused], R1
+			MOV	R1, 1
+			MOV [in_game], R1
+			MOV [muda_estado], R1
+			MOV R10, 8
+			MOV R11, 2
+			CALL espera_tecla_acabe
+			JMP return_main
+	
+	
+;************************************************************************************
+;tecla_E
+;	Esta rotina altera o estado do jogo para post_game
+;************************************************************************************
+	tecla_E:
+		MOV R1, 0
+		MOV [pre_game], R1
+		MOV [paused], R1
+		MOV	[in_game], R1
+		INC	R1
+		MOV [post_game], R1
+		MOV [muda_estado], R1
+		JMP return_main
+
+
+;************************************************************************************
+;return_main
+;	Esta rotina retorna ao local do código de onde foi chamada
+;************************************************************************************
+	return_main:
+		RET
+
+
+;************************************************************************************
+;testa_paused
+;	Esta rotina verifica se o jogo está em pausa ou não, alterando o seu estado
+;************************************************************************************
+testa_paused:
+	MOV	R0, [paused]
+	CMP	R0, 1
+	JZ	paused_game_on
+	JMP return_testa_paused
+	paused_game_on:		
+		DI
+		DI0
+		DI1
+		DI2	
+	espera_D:
+		MOV R10, 8
+		MOV R11, 2
+		CALL espera_tecla_acabe
+		CALL espera_tecla_escolha
+		CALL resume
+		
+	return_testa_paused:
+		RET
+
+
+;************************************************************************************
+;espera_tecla_escolha
+;	Esta rotina recebe como argumentos a linha (R10) e a coluna (R11) de uma 
+;		das teclas do teclado, e espera que essa tecla seja premida
+;************************************************************************************
+espera_tecla_escolha:
+	MOV R1, TEC_LIN
+	MOV R2, TEC_COL
+	MOV R6, MASCARA
+	MOVB	[R1], R10
+	ciclo_espera:
+		MOVB	R3, [R2]
+		AND	R3, R6
+		CMP R3, R11
+		JNZ	ciclo_espera
+	RET
+
+
+;************************************************************************************
+;espera_tecla_acabe
+;	Esta rotina recebe como argumentos a linha (R10) e a coluna (R11) de uma 
+;		das teclas do teclado, e espera que essa tecla deixe de ser premida
+;************************************************************************************
+espera_tecla_acabe:
+	MOV R1, TEC_LIN
+	MOV R2, TEC_COL
+	MOV R6, MASCARA
+	MOVB	[R1], R10
+	ciclo_espera_fim:
+		MOVB	R3, [R2]
+		AND	R3, R6
+		CMP R3, R11
+		JZ	ciclo_espera_fim
+	RET
+
+
+;************************************************************************************
+;testa_in_game
+;	Esta rotina verifica se o estado atual do jogo é in_game e, caso seja, 
+;		chama a rotina in_game_on
+;************************************************************************************
+testa_in_game:
+	MOV	R0, [in_game]
+	CMP	R0, 1
+	JNZ testa_in_game_return
+	CALL	in_game_on
+	testa_in_game_return:
+	RET
+
+
+;************************************************************************************
+;in_game_on
+;	Esta rotina inicializa tudo o que está relacionado com o estado in_game
+;************************************************************************************
+in_game_on:
+	MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+    MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+	
+	;IMAGENS E ATRASOS
+	MOV	R1, 1			                ; cenário de fundo número 1
+	MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	CALL ciclo_atraso_imagens_ecra
+	
+	MOV R3, 1			; escolhe-se o efeito sonoro para fazer a contagem decrescente
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro da contagem decrescente
+	
+	CALL delay_grande
+	
+	MOV R1, 2							; cenário de fundo número 2
+	MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+
+
+	CALL ciclo_atraso_imagens_ecra
+	
+	MOV R3, 1			; escolhe-se o efeito sonoro para fazer a contagem decrescente
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro da contagem decrescente
+	
+	CALL delay_grande
+	
+	MOV R1, 3							; cenário de fundo número 3
+	MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+
+	CALL ciclo_atraso_imagens_ecra
+
+	MOV R3, 1			; escolhe-se o efeito sonoro para fazer a contagem decrescente
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro da contagem decrescente
+	
+	CALL delay_grande
+	
+	MOV R1, 4							; cenário de fundo número 4
+	MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+
+	CALL ciclo_atraso_imagens_ecra
+
+	MOV R3, 2			; escolhe-se o efeito sonoro para fazer a contagem decrescente
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro da contagem decrescente
+	
+	CALL delay_grande
+	
+	MOV R1, 5							; cenário de fundo número 3
+	MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	MOV R1, 0
+	MOV	[muda_estado], R1
+	MOV [lock_rover], R1
+	MOV [lock_meteoro], R1
+	RET
+
+
+;************************************************************************************
+;testa_post_game
+;	Esta rotina verifica se o estado atual do jogo é post_game
+;************************************************************************************
+testa_post_game:
+	MOV	R0, [post_game]
+	CMP	R0, 1
+	JNZ testa_post_game_return
+	CALL	post_game_on
+	testa_post_game_return:
+	RET
+
+
+;************************************************************************************
+;post_game_on
+;	Esta rotina faz as inicializações de acordo com o método de acabar o jogo (falta de energia,
+;		colisão com meteoro, uso do botão de sair)
+;************************************************************************************
+post_game_on:
+	DI
+	DI0
+	DI1
+	DI2
+	MOV R1, [flag_colisao_nave_meteoro]
+	CMP R1, 1
+	JZ game_over_colisao
+	MOV R1, [flag_falhou_energia]
+	CMP R1, 1
+	JZ game_over_falta_energia
+	
+	MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+    MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+	
+	MOV	R1, 6			                ; cenário de fundo número 6
+    MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	CALL ciclo_atraso_imagens_ecra
+	
+	MOV R3, 5		; escolhe-se o efeito sonoro 
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro
+	
+	CALL ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+	
+	pos_inicializacoes:
+		CALL delay_grande
+		
+		MOV R10, 8
+		MOV R11, 4
+		
+		CALL espera_tecla_acabe
+		CALL espera_tecla_escolha
+		
+		MOV R3, 0			; escolhe-se o efeito sonoro
+		MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro para o fundo inicial 
+		MOV [flag_colisao_nave_meteoro], R3
+		MOV [flag_falhou_energia], R3
+		CALL pre_game_on
+		RET
+
+game_over_colisao:
+	MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+    MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+	MOV	R1, 8			                ; cenário de fundo número 8
+    MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	CALL ciclo_atraso_imagens_ecra
+	
+	MOV R3, 3		; escolhe-se o efeito sonoro 
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro
+	JMP pos_inicializacoes
+	
+game_over_falta_energia:
+	MOV  [APAGA_AVISO], R1	            ; apaga o aviso de nenhum cenário selecionado (o valor de R1 não é relevante)
+    MOV  [APAGA_ECRÃ], R1	            ; apaga todos os pixels já desenhados (o valor de R1 não é relevante)
+	MOV	R1, 9			                ; cenário de fundo número 9
+    MOV  [SELECIONA_CENARIO_FUNDO], R1	; seleciona o cenário de fundo
+	
+	CALL ciclo_atraso_imagens_ecra
+	
+	MOV R3, 4		; escolhe-se o efeito sonoro 
+	MOV [SOUND_EFFECT], R3 ; aplica um efeito sonoro
+	JMP pos_inicializacoes
+
+	
+;************************************************************************************
+;ciclo_atraso_imagens_ecra
+;	Esta rotina é um ciclo para atrasar a passagem das imagens e dos sons
+;************************************************************************************
+ciclo_atraso_imagens_ecra:
+	PUSH	R11
+	MOV		R11, ATRASO_IMAGENS
+	loop_atraso:
+		DEC R11
+		JNZ loop_atraso
+	POP R11
+	RET
+	
+	
+;************************************************************************************
+;reset_nave
+;	Esta rotina devolve à tabela que define a nave os seus valores originais 
+;************************************************************************************
+reset_nave:
+	PUSH R1
+	PUSH R2
+	MOV R1, DEF_NAVE
+	MOV R2, LINHA_DA_NAVE
+	MOV [R1], R2
+	ADD R1, 2
+	MOV R2, COLUNA_DA_NAVE
+	MOV [R1], R2
+	POP R2
+	POP R1
+	RET
+	
+	
+;************************************************************************************
+;reset_meteoros
+;	Esta rotina devole às tabelas que definem os vários meteoros os seus valores iniciais
+;************************************************************************************
+reset_meteoros:
+	PUSH R0
+	PUSH R1
+	PUSH R2
+	MOV R0, TABELA_METEOROS
+	CALL reset_linha_coluna_meteoro_1
+	ADD R0, 2
+	CALL reset_linha_coluna_meteoro_2
+	ADD R0, 2
+	CALL reset_linha_coluna_meteoro_3
+	ADD R0, 2
+	CALL reset_linha_coluna_meteoro_4
+	POP R2
+	POP R1
+	POP R0
+	RET
+	
+	
+;************************************************************************************
+;reset_display_energia
+;	Esta rotina devolve ao display o seu valor original (100H)
+;************************************************************************************
+reset_display_energia:
+	PUSH R1
+	MOV R1, DISPLAY_INICIAL
+	MOV [valor_display], R1
+	CALL hex_to_display
+	MOV [DISPLAY], R1
+	POP R1
+	RET
+	
+	
+;************************************************************************************
+;hex_to_display
+;	Esta rotina faz a transformação de um valor hexadecimal para um valor
+;		aparentemente decimal
+;************************************************************************************
+hex_to_display:
+	PUSH R2
+	PUSH R3
+	PUSH R4
+	MOV R1, [valor_display]
+	MOV R2, R1
+	MOV R3, 10	;fator de divisão
+	DIV R1, R3
+	MOD R2, R3	;resto da divisão inteira(número a converter)
+	SHL R1, 4	;desloca para dar espaço ao novo dígito
+	MOV R4, R1
+	DIV R1, R3
+	MOD R4, R3	;resto da divisão inteira(número a converter)
+	SHL R1, 4	;desloca para dar espaço ao novo dígito
+	OR 	R1, R2	;vai compondo o resultado
+	OR	R1, R4	;vai compondo o resultado
+	POP R4
+	POP R3
+	POP R2
+	RET
+
+
+;************************************************************************************
+;reset_linha_coluna_meteoro_X
+;	Estas rotinas devolvem a posicao original à tabela que define cada meteoro
+;************************************************************************************
+reset_linha_coluna_meteoro_1:
+	MOV R1, [R0]
+	MOV R2, LINHA_DO_METEORO
+	MOV [R1], R2
+	ADD R1, 2
+	MOV R2, COLUNA_METEORO_1
+	MOV [R1], R2
+	ADD R1, 4
+	MOV R2, 0
+	MOV [R1], R2
+	RET
+	
+reset_linha_coluna_meteoro_2:
+	MOV R1, [R0]
+	MOV R2, LINHA_DO_METEORO
+	MOV [R1], R2
+	ADD R1, 2
+	MOV R2, COLUNA_METEORO_2
+	MOV [R1], R2
+	ADD R1, 4
+	MOV R2, 0
+	MOV [R1], R2
+	RET
+	
+reset_linha_coluna_meteoro_3:
+	MOV R1, [R0]
+	MOV R2, LINHA_DO_METEORO
+	MOV [R1], R2
+	ADD R1, 2
+	MOV R2, COLUNA_METEORO_3
+	MOV [R1], R2
+	ADD R1, 4
+	MOV R2, 0
+	MOV [R1], R2
+	RET
+	
+reset_linha_coluna_meteoro_4:
+	MOV R1, [R0]
+	MOV R2, LINHA_DO_METEORO
+	MOV [R1], R2
+	ADD R1, 2
+	MOV R2, COLUNA_METEORO_4
+	MOV [R1], R2
+	ADD R1, 4
+	MOV R2, 0
+	MOV [R1], R2
+	RET
+	
+	
+;********************************************************************************
+
+PROCESS		SP_inicial_teclado
+
+;********************************************************************************
+
+
+;************************************************************************************
+;Processo teclado
+;	Este processo trata de ler o input dado pelo utilizador através do teclado
+; 		e redirecionar cada tecla à sua respetiva função (não diretamente) 
+;************************************************************************************
+teclado:
+	YIELD
+	MOV R1, TEC_LIN
+	MOV R2, TEC_COL
+	MOV R7, LINHA
+	MOV R6, MASCARA
+	JMP espera_tecla
+	
+	muda_linha:
+		SHR R7, 1 ;passa para a linha de cima
+		CMP R7, 0 ;verifica se já passou as linhas todas
+		JZ teclado  ;se já tiver passado pelas linhas todas repete o ciclo
+		
+	espera_tecla:
+		MOV R8, R7
+		MOVB [R1], R7
+		MOVB R0, [R2]
+		AND R0, R6
+		CMP R0, 0
+		JZ	muda_linha
+		SHL R7, 4
+		OR	R7, R0
+		MOV [tecla_carregada], R7
+		CMP R8, 1
+		JZ	tecla_continua
+		MOV R3, 8
+		CMP R8, R3
+		JZ comando_estado
+		JMP teclado
+		
+	tecla_continua:		; teclas do rover 
+		MOV [lock_rover], R0
+		YIELD
+		MOVB R0, [R2]
+		AND R0, R6
+		CMP R0, 0
+		JZ teclado
+		CMP R0, 2
+		JZ tecla_missil
+		JMP tecla_continua
+		
+	comando_estado:		; teclas de estado
+		MOV [lock_estado], R0
+		JMP teclado
+	
+	tecla_missil:		; tecla de lançamento do missil
+		MOV [lock_missil], R0
+		JMP teclado
+	
+	
+;******************************************************************************************
+
+PROCESS		SP_inicial_rover
+
+;******************************************************************************************
+
+
+;************************************************************************************
+;Processo rover
+;	Este processo trata de gerir os movimentos do rover 
+;************************************************************************************
+rover:
+	processo_rover:
+		CALL desenha_rover
+		MOV R0, [lock_rover]
+		JMP func_tecla_rover
+		houve_movimento:
+		CALL delay_rover
+		CALL dados_nave
+		CALL apaga_boneco
+		CALL coluna_seguinte
+		JMP	 processo_rover
+	
+
+;************************************************************************************
+;delay_rover
+;	Esta rotina cria um delay no movimento do rover, de modo 
+;		a diminuir a sua velocidade 
+;************************************************************************************	
+delay_rover:
+	PUSH R10
+	MOV R10, ATRASO
+	loop_delay:
+		DEC R10
+		JNZ loop_delay
+	POP R10
+	RET
+	
+	
+;************************************************************************************
+;desenha_rover
+;	Esta rotina recebe os dados relevantes do rover e desenha-o
+;************************************************************************************
+desenha_rover:
+	CALL dados_nave	; obtém os dados da nave a partir da tabela que a define e guarda-os em registos
+	CALL desenha	; desenha a nave a partir dos dados que obteve
+	RET
+
+
+;************************************************************************************
+;dados_nave
+;	Esta rotina busca os dados mais relevantes do rover para serem usados 
+;		por outras funcoes
+;************************************************************************************	
+dados_nave:
+	MOV R4, DEF_NAVE 	; referência da tabela que define a nave
+	MOV R1, [R4]		; obtém o valor da linha onde começa a nave
+	ADD R4, 2			
+	MOV R2, [R4]		; obtém o valor da coluna onde começa a nave
+	MOV R6, R2			; faz uma cópia do valor da coluna
+	ADD R4, 2
+	MOV R5, [R4]		; obtém o valor da largura da nave
+	MOV R8, R5			; faz uma cópia do valor da largura da nave
+	ADD R4, 2
+	MOV R10, [R4]		; obtém a altura da nave
+	RET
+
+
+;************************************************************************************
+;desenha
+;	Esta rotina desenha o rover com os dados que obteve da função dados_nave
+;************************************************************************************
+desenha:
+	ADD	R4, 2			    ; endereço da cor do 1º pixel (2 porque a largura é uma word)	
+	desenha_pixels:       		    ; desenha os pixels do boneco a partir da tabela
+		MOV	R3, [R4]			; obtém a cor do próximo pixel do boneco
+		MOV  [DEFINE_LINHA], R1	; seleciona a linha
+		MOV  [DEFINE_COLUNA], R6	; seleciona a coluna
+		MOV  [DEFINE_PIXEL], R3	; altera a cor do pixel na linha e coluna selecionadas
+		ADD  R4, 2			    ; endereço da cor do próximo pixel (2 porque cada cor de pixel é uma word)
+		ADD  R6, 1                ; próxima coluna
+		SUB  R5, 1			    ; menos uma coluna para tratar
+		JNZ  desenha_pixels       ; continua até percorrer toda a largura do objeto
+	
+	MOV R5, R8		; copia da largura do objeto
+	MOV R6, R2		; copia da coluna do objeto
+	ADD R1, 1		; proxima linha do objeto
+	SUB R10, 1		; menos uma linha para desenhar
+	CMP R10, 0		; verifica quantas linhas faltam desenhar
+	JNZ desenha_pixels	; caso hajam linhas por desenhar repete o ciclo
+	RET
+	
+	
+;************************************************************************************
+;func_tecla_rover
+;	Esta rotina gere as funções de cada tecla que controla o rover (0 e 2)
+;************************************************************************************
+func_tecla_rover:
+	MOV R0, [tecla_carregada]
+	MOV	R1, TECLA_0
+	CMP R0, R1
+	JZ	tecla_0
+	MOV R1, TECLA_2
+	CMP R0, R1
+	JZ  tecla_2
+	JMP rover
+	
+	tecla_0:	; o rover anda para a esquerda
+		MOV R1, -1
+		MOV [sentido_rover], R1
+		JMP houve_movimento
+
+	tecla_2:	; o rover anda para a direita
+		MOV R1, 1
+		MOV [sentido_rover], R1
+		JMP houve_movimento
+
+
+;************************************************************************************
+;apaga_boneco
+;	Esta rotina recebe os mesmos dados que a rotina desenha, mas desta vez 
+;		para apagar o rover
+;************************************************************************************
+apaga_boneco:       		    ; desenha o boneco a partir da tabela que o define
+	apaga_pixels:       		    ; desenha os pixels do boneco a partir da tabela
+		MOV	R3, 0			    ; para apagar, a cor do pixel é sempre 0
+		MOV  [DEFINE_LINHA], R1	; seleciona a linha
+		MOV  [DEFINE_COLUNA], R6	; seleciona a coluna
+		MOV  [DEFINE_PIXEL], R3	; altera a cor do pixel na linha e coluna selecionadas
+		ADD  R6, 1                ; próxima coluna
+		SUB  R5, 1			    ; menos uma coluna para tratar
+		JNZ  apaga_pixels		    ; continua até percorrer toda a largura do objeto
+	
+	ADD	R1, 1			; passa para a linha de baixo
+	MOV R5, R8			; devolve o valor da largura do objeto a R5 para repetir nas proximas linhas
+	MOV R6, R2			; copia de novo a coluna inicial do boneco
+	SUB R10, 1			; menos uma linha 
+	JNZ apaga_pixels
+	RET
+
+
+;************************************************************************************
+;coluna_seguinte
+;	Esta rotina testa os limites do ecrã e testa se o rover tem a possibilidade de 
+;		se movimentar ou não
+;************************************************************************************
+coluna_seguinte:
+	MOV R4, DEF_NAVE		; referência da tabela onde está definida a nave
+	ADD R4, 2				; referência onde está definida a coluna onde começa a nave
+	MOV R2, [R4]		; obtém o valor da coluna onde começa a nave
+	MOV R0, [sentido_rover]
+	JMP testa_lim_esq
+	dentro_lim_esq:
+		JMP testa_lim_dto
+	dentro_lim_dto:
+		ADD	R2, R0		    ; soma ou subtrai uma coluna à coluna atual
+		SUB R4, 2
+		MOV [R4], R2		; é atualizado na tabela o valor da coluna da nave
+	JMP return
+	
+	testa_lim_esq:		; testa o limite esquerdo do ecrã
+		MOV	R5, MIN_COLUNA	
+		MOV R6, R2
+		ADD R6, R0
+		ADD R6, 1
+		CMP	R6, R5			; compara a coluna atual do boneco com o valor mínimo possível para a coluna (limite esquerdo)
+		JZ return
+		JMP	dentro_lim_esq
+
+	testa_lim_dto:		; testa o limite direito do ecrã
+		ADD R4, 2
+		MOV	R6, [R4]	; obtém a largura do boneco
+		ADD	R6, R2			    ; posição a seguir ao extremo direito do boneco
+		ADD R6, R0
+		SUB R6, 1
+		MOV	R5, MAX_COLUNA
+		CMP	R6, R5		; compara com o limite direito do ecrã
+		JZ return
+		JMP	dentro_lim_dto
+
+	return:
+		RET
+	
+	
+;**************************************
+;INTERRUPÇÕES
+;**************************************
+
+
+;************************************************************************************
+;int_move_missil
+;	Esta rotina de interrupcao desbloqueia o movimento do missil
+;************************************************************************************
+int_move_missil:
+	PUSH R1
+	MOV [lock_move_missil], R1
+	POP R1
+	RFE
+	
+	
+;************************************************************************************
+;int_move_meteoro
+;	Esta rotina de interrupcao desbloqueia o movimento do meteoro
+;************************************************************************************
+int_move_meteoro:
+	PUSH R1
+	MOV R1, 1
+	MOV [lock_meteoro], R1
+	MOV [flag_descer_meteoro], R1
+	POP R1
+	RFE
+
+
+;************************************************************************************
+;int_desce_display
+;	Esta rotina de interrupcao ativa uma flag que indicará ao Processo display que
+;		o valor do display tem de diminuir em 5 unidades
+;************************************************************************************
+int_desce_display:
+	PUSH R1
+	MOV R1, 1
+	MOV [flag_diminui_display], R1
+	POP R1
+	RFE
+	
+	
+;**************************************************************************************************
+
+PROCESS	SP_inicial_meteoro
+
+;*************************************************************************************************
+
+;************************************************************************************
+;Processo meteoros
+;	Este processo trata de todas as operações relacionadas com os meteoros, com exceção
+;		de procurar por colisões 
+;************************************************************************************
+meteoros:
+	processo_meteoros:
+		CALL desenha_meteoros_todos
+		MOV R0, [lock_meteoro]
+		MOV R0, [flag_descer_meteoro]
+		CMP R0, 0
+		JZ meteoros
+		CALL apaga_meteoros
+		CALL desce_linha
+		JMP processo_meteoros
+
+
+
+;************************************************************************************
+;desenha_meteoros_todos
+;	Esta rotina desenha todos os meteoros, obtendo os seus enderecos a partir de uma
+;		tabela de enderecos
+;************************************************************************************
+desenha_meteoros_todos:
+	MOV R0, TABELA_METEOROS	;endereço de memória da tabela dos meteoros	(tabela que contém endereços de tabelas que definem meteoros)
+	MOV R11, 4
+	loop_pelos_meteoros:
+		CALL dados_meteoro
+		desenha_meteoro:
+				MOV R6, [R1]
+				MOV R9, R6
+				ADD R1, 2
+				MOV R10, [R1]
+				ADD R1, 2
+			desenha_pixeis:       		    ; desenha os pixels do boneco a partir da tabela
+				MOV	R4, [R1]			; obtém a cor do próximo pixel do boneco
+				MOV  [DEFINE_LINHA], R2	; seleciona a linha
+				MOV  [DEFINE_COLUNA], R3	; seleciona a coluna
+				MOV  [DEFINE_PIXEL], R4	; altera a cor do pixel na linha e coluna selecionadas
+				ADD  R1, 2			    ; endereço da cor do próximo pixel (2 porque cada cor de pixel é uma word)
+				ADD  R3, 1                ; próxima coluna
+				SUB  R6, 1			    ; menos uma coluna para tratar
+				JNZ  desenha_pixeis       ; continua até percorrer toda a largura do objeto
+			
+				MOV R3, R8		; copia da coluna do objeto
+				MOV R6, R9		; copia da largura do objeto
+				ADD R2, 1		; proxima linha do objeto
+				SUB R10, 1		; menos uma linha para desenhar
+				CMP R10, 0		; verifica quantas linhas faltam desenhar
+				JNZ desenha_pixeis	; caso hajam linhas por desenhar repete o ciclo
+		
+		ADD R0, 2
+		SUB R11, 1
+		CMP R11, 0
+		JNZ loop_pelos_meteoros
+		PUSH R0
+		POP R0
+	return_meteoro:
+		RET
+
+;************************************************************************************
+;dados_meteoro
+;	Esta rotina obtém os dados do meteoro para uso futuro (como o dados_nave)
+;************************************************************************************
+
+dados_meteoro:
+			MOV R1, [R0]			;endereço de memória da tabela que define o meteoro
+			MOV R2, [R1]			;valor da linha do meteoro
+			ADD R1, 2				;endereço da coluna do meteoro
+			MOV R3, [R1]			;valor da coluna do meteoro
+			MOV R8, R3
+			ADD R1, 2				;endereço do tipo de meteoro
+			MOV R4, [R1]			;valor do tipo do meteoro (bom -> 1, mau -> 0)
+			ADD R1, 2				;endereço do tamanho do meteoro 
+			MOV R5, [R1]				;valor do tamanho do meteoro (0 - 4)
+			CMP R4, 0					
+			JZ	obtem_forma_meteoro_mau ;R4 tem valor 0 (meteoro mau)
+			JMP obtem_forma_meteoro_bom	;R4 tem valor 1 (meteoro bom)
+
+
+;************************************************************************************
+;obtem_forma_meteoro_mau/obtem_forma_meteoro_bom
+;	Esta rotina usa os valores dos enderecos de uma tabela de tamanhos para descobrir
+;		o design respetivo de cada meteoro
+;************************************************************************************	
+		obtem_forma_meteoro_mau:
+			PUSH R2
+			PUSH R3
+			MOV R2, R5
+			MOV R3, 2
+			MUL R2, R3
+			MOV R3, TABELA_DESIGN_METEORO_MAU
+			ADD R2, R3
+			MOV R1, [R2]
+			POP R3
+			POP R2
+			RET
+			
+		obtem_forma_meteoro_bom:
+			PUSH R2
+			PUSH R3
+			MOV R2, R5
+			MOV R3, 2
+			MUL R2, R3
+			MOV R3, TABELA_DESIGN_METEORO_BOM
+			ADD R2, R3
+			MOV R1, [R2]
+			POP R3
+			POP R2
+			RET
+		
+		
+;************************************************************************************
+;desce_linha
+;	Esta rotina faz as verificacoes necessárias para se certificar de que o meteoro pode 
+;		avancar uma linha
+;************************************************************************************
+
+desce_linha:
+	MOV R0, TABELA_METEOROS
+	MOV R1, 0
+	MOV R9, [flag_descer_meteoro]
+	MOV R11, 4
+	MOV [flag_descer_meteoro], R1
+	aumenta_linhas:
+		MOV R1, [R0]
+		MOV R2, [R1]
+		ADD R2, R9
+		MOV [R1], R2
+		CALL check_meteoro_dentro_ecra
+		CALL check_meteoro_colisao 
+		CALL atualiza_forma_meteoro
+		ADD R0, 2
+		SUB R11, 1
+		CMP R11, 0
+		JNZ aumenta_linhas
+		RET
+
+
+;************************************************************************************
+;check_meteoro_dentro_ecra
+;	Esta rotina verifica se o meteoro ainda está visível o ecrã
+;	Caso não esteja, reinicia o meteoro
+;************************************************************************************
+check_meteoro_dentro_ecra:
+	MOV R2, MAX_LINHA
+	MOV R3, [R1]
+	CMP R3, R2
+	JGE	reinicia_meteoro 
+	RET
+	
+	
+;************************************************************************************
+;reinicia_meteoro
+;	Esta rotina reinicia o meteoro, fornecendo-lhe um novo valor para a coluna
+;************************************************************************************
+reinicia_meteoro:
+	MOV R2, 0
+	MOV [R1], R2
+	CALL nova_coluna
+	MOV [R1+6], R2
+	MOV [R1+8], R2
+	MOV [R1+10], R2
+	RET
+	
+
+;************************************************************************************
+;nova_coluna
+;	Esta rotina obtém um novo valor para a coluna do meteoro
+;************************************************************************************
+nova_coluna:
+	PUSH R0
+	PUSH R2
+	PUSH R3
+	MOV R3, TEC_COL
+	MOVB R0, [R3]
+	SHR  R0, 5
+	MOV R3, R0
+	MOV R2, 8
+	MUL R0, R2
+	MOV R2, MASCARA_1
+	AND	R3, R2
+	MOV [R1+2], R0
+	MOV [R1+4], R3
+	POP R3
+	POP R2
+	POP R0
+	RET
+
+
+;************************************************************************************
+;check_meteoro_colisao
+;	Esta rotina procura na tabela que define o meteoro por informação que informe o 
+;		programa de que o meteoro colidiu com alguma coisa
+;************************************************************************************
+check_meteoro_colisao:
+	PUSH R0
+	MOV R0, [R1+8]
+	CMP R0, 1
+	JZ 	colisao_com_nave
+	MOV R0, [R1+10]
+	CMP R0, 1
+	JZ	reset_meteoro_e_missil
+	POP R0
+	RET
+
+
+;************************************************************************************
+;colisao_com_nave
+;	Esta rotina verifica qual a natureza do meteoro (bom / mau) e redireciona para
+; 		outras rotinas de acordo com a informação que obteve
+;************************************************************************************
+colisao_com_nave:
+	MOV R0, [R1+4]
+	CMP R0, 0
+	JZ  met_mau_colide_com_nave
+	JMP met_bom_colide_com_nave
+
+
+;************************************************************************************
+;met_mau_colide_com_nave
+;	Esta rotina refere-se ao evento de um meteoro mau colidir com a nave
+;	É ativada a flag de colisao e o estado do jogo é alterado para post_game
+;************************************************************************************
+met_mau_colide_com_nave:	;NOTA: ESTA FUNÇÃO ESTÁ A DAR PROBLEMAS NÃO SEI PORQUÊ
+	PUSH R1
+	MOV R1, 1
+	MOV [flag_colisao_nave_meteoro], R1
+	POP R1
+	POP R0	
+	CALL post_game_on
+	RET
+
+
+;************************************************************************************
+;met_bom_colide_com_nave
+;	Esta rotina refere-se ao evento de um meteoro bom colidir com a nave
+;	É acrescentado ao display 10 pontos de energia
+;************************************************************************************
+met_bom_colide_com_nave:
+	MOV R0, [soma_display]
+	PUSH R1
+	MOV R1, 10
+	ADD R0, R1
+	POP R1
+	MOV [soma_display], R0
+	POP	R0
+	CALL reinicia_meteoro
+	RET
+
+
+;************************************************************************************
+;reset_meteoro_e_missil
+;	Esta rotina reinicia ambos o meteoro e o missil, devolvendo os seus valores originais
+;************************************************************************************
+reset_meteoro_e_missil:
+	PUSH R1
+	PUSH R2
+	MOV R2, [R1+4]
+	CMP R2, 0
+	JZ met_mau_colide_com_missil
+	JMP met_bom_colide_com_missil
+
+;************************************************************************************
+;met_mau_colide_com_missil
+;	Esta rotina refere-se ao evento de um missil acertar num meteoro mau
+;	Nesta situação, 5 pontos de energia serão adicionados ao display
+;************************************************************************************
+met_mau_colide_com_missil:
+	MOV R0, [soma_display]
+	MOV R1, 5
+	ADD R0, R1
+	MOV [soma_display], R0
+	POP R2
+	POP R1
+	POP R0
+	CALL reinicia_meteoro
+	RET
+
+;************************************************************************************
+;met_bom_colide_com_missil
+;	Esta rotina refere-se ao evento de um missil acertar num meteoro bom
+;	Nesta situação nada acontece (para além de reiniciar o meteoro e o missil)
+;************************************************************************************
+met_bom_colide_com_missil:
+	POP R2
+	POP R1
+	POP R0
+	CALL reinicia_meteoro
+	RET
+
+;************************************************************************************
+;atualiza_forma_meteoro
+;	Esta rotina compara a linha atual do meteoro com linhas predefinidas, de modo a 
+;		descobrir o tamanho atual do meteoro
+;************************************************************************************
+	
+atualiza_forma_meteoro:
+	MOV R1, [R0]
+	MOV R2, [R1]
+	CMP R2, 3
+	JZ forma_1
+	CMP R2, 6
+	JZ forma_2
+	MOV R3, 9
+	CMP R2, R3
+	JZ forma_3
+	MOV R3, 12
+	CMP R2, R3
+	JZ forma_4
+	MOV R3, 15
+	CMP R2, R3
+	JGE forma_5
+	RET
+
+	forma_1:
+		ADD R1, 6
+		MOV R2, 0
+		MOV [R1], R2
+		JMP return_atualiza_forma_meteoro
+
+	forma_2:
+		ADD R1, 6
+		MOV R2, 1
+		MOV [R1], R2
+		JMP return_atualiza_forma_meteoro
+		
+	forma_3:
+		ADD R1, 6
+		MOV R2, 2
+		MOV [R1], R2
+		JMP return_atualiza_forma_meteoro
+		
+	forma_4:
+		ADD R1, 6
+		MOV R2, 3
+		MOV [R1], R2
+		JMP return_atualiza_forma_meteoro
+		
+	forma_5:
+		ADD R1, 6
+		MOV R2, 4
+		MOV [R1], R2
+		JMP return_atualiza_forma_meteoro
+		
+	return_atualiza_forma_meteoro:
+		RET
+
+;************************************************************************************
+;apaga_meteoros
+;	Esta rotina chama a rotina apaga_meteoro para apagar todos os meteoros da tabela
+;		de meteoros
+;************************************************************************************
+	
+apaga_meteoros:
+	MOV R0, TABELA_METEOROS
+	CALL apagar_meteoro
+	ADD R0, 2
+	CALL apagar_meteoro
+	ADD R0, 2
+	CALL apagar_meteoro
+	ADD R0, 2
+	CALL apagar_meteoro
+	RET
+
+;************************************************************************************
+;apaga_meteoro
+;	Esta rotina apaga todos os meteoros usando os dados obtidos a partir da rotina
+;		dados_meteoro
+;************************************************************************************
+	
+apagar_meteoro:
+		CALL dados_meteoro
+		MOV R6, [R1]
+		MOV R9, R6
+		ADD R1, 2
+		MOV R10, [R1]
+		MOV	R5, 0		; nova cor do pixel (trasparente)
+	apaga_pixeis:       		    ; desenha os pixels do boneco a partir da tabela
+		MOV  [DEFINE_LINHA], R2	; seleciona a linha
+		MOV  [DEFINE_COLUNA], R3	; seleciona a coluna
+		MOV  [DEFINE_PIXEL], R5	; altera a cor do pixel na linha e coluna selecionadas
+		ADD  R3, 1                ; próxima coluna
+		SUB  R6, 1			    ; menos uma coluna para tratar
+		JNZ  apaga_pixeis       ; continua até percorrer toda a largura do objeto
+	
+		MOV R3, R8		; copia da coluna do objeto
+		MOV R6, R9		; copia da largura do objeto
+		ADD R2, 1		; proxima linha do objeto
+		SUB R10, 1		; menos uma linha para desenhar
+		CMP R10, 0		; verifica quantas linhas faltam desenhar
+		JNZ apaga_pixeis	; caso hajam linhas por desenhar repete o ciclo
+	RET
+		
+;***********************************************************************************************************************
+
+PROCESS		SP_inicial_display
+
+;***********************************************************************************************************************
+
+;************************************************************************************
+;Processo display
+;	Este processo gere os valores que são apresentados no display hexadecimal
+;************************************************************************************
+
+display:
+	MOV R1, DISPLAY_INICIAL
+	MOV [DISPLAY], R1
+	processo_display:
+		CALL atualiza_display	;soma o soma_display com o display_atual
+		YIELD
+		CALL atualiza_soma_display	;verifica se a interrupcao foi ativada
+		CALL fim_energia	; verifica se a eneergia do rover acabou ou nao (se sim, ativar o post_game)
+		JMP processo_display
+	
+;************************************************************************************
+;atualiza_display
+;	Esta rotina atualiza o valor apresentado no display, somando o valor que está
+;		guardado na referência soma_display
+;************************************************************************************
+atualiza_display:
+	MOV R0, [soma_display]
+	MOV R1, [valor_display]
+	ADD R1, R0
+	MOV R0, 0
+	MOV [valor_display], R1
+	MOV [soma_display], R0
+	CALL tradutor_decimal_hexa
+	MOV [DISPLAY], R1 			
+	RET
+
+;************************************************************************************
+;atualiza_soma_display
+;	Esta rotina atualiza o valor guardado na referência soma_display
+;************************************************************************************
+atualiza_soma_display:
+	MOV R0, [soma_display]
+	MOV R1, [flag_diminui_display]
+	CMP R1, 1
+	JNZ return_atualiza_soma_display
+	MOV R1, 0
+	MOV [flag_diminui_display], R1	
+	MOV R1, 5
+	SUB R0, R1
+	MOV [soma_display], R0
+	return_atualiza_soma_display:
+	RET
+
+;************************************************************************************
+;fim_energia
+;	Esta rotina verifica se o rover ainda tem energia ou não
+;************************************************************************************
+fim_energia:
+	MOV R1, [valor_display]
+	CMP R1, 0
+	JZ	acabar_jogo_falta_energia
+	RET
+
+;************************************************************************************
+;acabar_jogo_falta_energia
+;	No caso da rotina anterior verificar que o rover tem 0 de energia, esta rotina
+;		ativa a flag de falha de energia e altera o estado do jogo para post_game
+;************************************************************************************
+acabar_jogo_falta_energia:
+	MOV R1, 1
+	MOV [flag_falhou_energia], R1
+	CALL post_game_on
+	RET
+
+;************************************************************************************
+;tradutor_decimal_hexa
+;	Esta rotina traduz de hexadecimal para um valor visualmente igual a decimal quando
+;		mostrado no display hexadecimal
+;************************************************************************************
+tradutor_decimal_hexa:
+	PUSH R2
+	PUSH R3
+	MOV R1, [valor_display]
+	MOV R2, R1
+	MOV R3, 10	
+	DIV R1, R3	;fator de divisão
+	MOD R2, R3	;resto da divisão inteira
+	SHL R1, 4	;desloca para dar espaço ao novo dígito
+	OR 	R1, R2	;vai compondo o resultado
+	POP R3
+	POP R2
+	RET
+
+
+
+;****************************************************************************************
+
+PROCESS		SP_inicial_missil
+
+;****************************************************************************************
+
+;************************************************************************************
+;Processo Missil
+;	Este processo gere o movimento do missil lançado pelo rover 
+;************************************************************************************
+missil:
+	processo_missil:
+		MOV R0, [lock_missil]
+		CALL dispara_e_move_missil
+		CALL reset_missil
+		JMP processo_missil
+	
+;***************************************************************************************	
+
+
+;************************************************************************************
+;dispara_e_move_missil
+;	Esta rotina trata de todo o movimento do missil, apagando-o quando ele chegar ao 
+;		seu alcance máximo
+;************************************************************************************
+dispara_e_move_missil:
+	PUSH R9
+	MOV R9, [soma_display]
+	SUB R9, 5
+	MOV [soma_display], R9
+	POP	R9	
+	MOV R0, [DEF_MISSIL]	;linha onde começa o missil (1 acima da nave)
+	MOV R1, [DEF_NAVE+2]	;coluna inicial da nave
+	ADD R1, 2				;coluna do missil (a meio da nave)
+	MOV [DEF_MISSIL+ 8], R1
+	MOV R2, [DEF_MISSIL+2]  ;cor do missil
+	loop_move_missil:
+			CALL desenha_missil	;desenha o missil
+			MOV R11, [lock_move_missil]	;desbloqueado pela interrupcao
+			CALL apaga_missil	;apaga o missil
+			JMP verifica_alcance_missil	;verifica se o missil chegou ao fim do seu percurso
+		alcance_positivo:		;caso ainda não tenha chegado
+			CALL atualiza_missil	;atualiza a tabela do missil com a sua nova posicao
+			JMP loop_move_missil	;repete o ciclo
+	return_missil:	;o missil acabou o seu percurso
+		RET
+
+;************************************************************************************
+;desenha_missil
+;	Esta rotina pinta o pixel ocupado pelo missil
+;************************************************************************************
+desenha_missil:
+		MOV  [DEFINE_LINHA], R0	; seleciona a linha
+		MOV  [DEFINE_COLUNA], R1	; seleciona a coluna
+		MOV  [DEFINE_PIXEL], R2	; altera a cor do pixel na linha e coluna selecionadas
+		RET
+		
+;************************************************************************************
+;apaga_missil
+;	Esta rotina desliga o pixel ocupado pelo missil
+;************************************************************************************
+apaga_missil:
+	PUSH R2
+	MOV R2, 0
+	CALL desenha_missil
+	POP R2
+	RET
+
+;************************************************************************************
+;verifica_alcance_missil
+;	Esta rotina verifica se o movimento do missil chegou ao fim ou não
+;************************************************************************************
+verifica_alcance_missil:
+	MOV R4, [DEF_MISSIL+6]	;valor do alcance que o missil ainda tem
+	CMP R4, 0
+	JZ	return_missil
+	JMP alcance_positivo
+
+;************************************************************************************
+;atualiza_missil
+;	Esta rotina atualiza os valores da linha e de alcance do missil na tabela que o define
+;************************************************************************************
+atualiza_missil:
+	SUB R0, 1				;passa para a linha de cima
+	MOV [DEF_MISSIL], R0	;atualiza na tabela
+	MOV R4, [DEF_MISSIL+6]	;valor do alcance que o missil ainda tem
+	SUB R4, 1 				;menos uma unidade de alcance 
+	MOV [DEF_MISSIL+6], R4 	;atualiza o alcance na tabela
+	RET
+	
+;************************************************************************************
+;reset_missil
+;	Esta rotina devolve os valores originais à tabela que define o missil
+;************************************************************************************
+reset_missil:
+	MOV R4, LINHA_DA_NAVE
+	MOV [DEF_MISSIL], R4
+	MOV R4, 0
+	MOV [DEF_MISSIL+4], R4
+	MOV R4, ALCANCE_MISSIL
+	MOV [DEF_MISSIL+6], R4
+	RET
+	
+	
+
+;************************************************************************************
+	
+PROCESS		SP_inicial_colisoes
+
+;************************************************************************************
+
+;************************************************************************************
+;Processo colisoes
+;	Este processo trata de todas as interacoes entre objetos (colisoes)
+;************************************************************************************
+colisoes:
+	YIELD
+	CALL	check_colisao_meteoro_nave
+	CALL	check_colisao_meteoro_missil
+	JMP		colisoes
+		
+
+;************************************************************************************
+;check_colisao_meteoro_nave
+;	Esta rotina verifica algum meteoro e a nave partilham pelo menos um pixel do ecrã
+;************************************************************************************
+check_colisao_meteoro_nave:
+	MOV R0, TABELA_METEOROS
+	MOV R11, 4
+	loop_check_colisao:
+		CALL dados_meteoro	; R2 fica com o valor da linha do meteoro e R3 com a coluna do mesmo
+		MOV R4, [R1]		;largura do meteoro (igual à altura, segundo o design definido)
+		MOV R5, LINHA_DA_NAVE
+		ADD R2, R4
+		SUB R2, 1
+		CMP R2, R5
+		JLT	proxima_iteracao
+		CALL compara_colunas_met_nave
+		proxima_iteracao:
+			ADD R0, 2
+			SUB R11, 1
+			JNZ loop_check_colisao
+		RET
+	
+;************************************************************************************
+;compara_colunas_met_nave
+;	Esta rotina verifica compara as colunas da nave com as colunas do meteoro
+;		de forma a saber se estes se encontram nalgum ponto
+;************************************************************************************
+compara_colunas_met_nave:
+		MOV R7, DEF_NAVE
+		MOV R5, [R7+2]		;coluna inicial da nave
+		MOV R6, [R7+4]		;largura da nave
+		MOV R2, R3			;R2 passa a ter a coluna inicial do meteoro
+		ADD R3, R4			
+		SUB R3, 1 			;R3 fica com o valor da coluna final do meteoro
+		MOV R7, R5
+		ADD R7, R6
+		SUB R7, 1			;R7 tem agora o valor da coluna final da nave
+							;R5 tem o valor da coluna inicial
+		CMP	R2, R7	
+		JGT return_compara_colunas
+		CMP R5, R3
+		JGT return_compara_colunas
+		
+		CALL houve_colisao_meteoro_nave
+	
+	return_compara_colunas:
+		RET
+		
+		
+;************************************************************************************
+;houve_colisao_meteoro_nave
+;	Esta rotina atualiza valores nas tabelas dos objetos e de uma flag para informar
+;		o programa de que houve uma colisao entre um meteoro e a nave
+;************************************************************************************
+houve_colisao_meteoro_nave:
+	PUSH R1
+	PUSH R7
+	MOV R1, [R0]
+	MOV R7, 1
+	MOV [R1+8], R7	;endereço da flag de colisao com nave (no DEF_METEORO)
+	POP R7
+	POP R1
+	RET
+	
+;************************************************************************************
+;check_colisao_meteoro_missil
+;	Esta rotina verifica algum meteoro e o missil partilham um pixel do ecrã (o pixel do missil)
+;************************************************************************************
+check_colisao_meteoro_missil:
+	MOV R0, TABELA_METEOROS
+	MOV R11, 4
+	loop_check_colisao_met_missil:
+		CALL dados_meteoro	; R2 fica com o valor da linha do meteoro e R3 com a coluna do mesmo
+		MOV R4, [R1]		;largura do meteoro (igual à altura)
+	
+		MOV R7, [DEF_MISSIL]
+		
+		ADD R2, R4
+		SUB R2, 1		;R2 agora tem o valor da última linha do meteoro
+		
+		CMP R2, R7
+		JLT next_iter
+		
+		CALL compara_colunas_met_missil
+	next_iter:
+			ADD R0, 2
+			SUB R11, 1
+			JNZ loop_check_colisao_met_missil
+		RET
+
+;************************************************************************************
+;compara_colunas_met_missil
+;	Esta rotina verifica compara a coluna do missil com as colunas do meteoro
+;		de forma a saber se estes se encontram nalgum ponto
+;************************************************************************************
+compara_colunas_met_missil:
+		MOV R7, [DEF_MISSIL + 8]
+		CMP R3, R7
+		JGT return_compara_colunas_met_missil
+		ADD R3, R4
+		CMP R3, R7
+		JLT	return_compara_colunas_met_missil
+		CALL houve_colisao_met_missil
+	return_compara_colunas_met_missil:
+		RET
+		
+;************************************************************************************
+;houve_colisao_meteoro_missil
+;	Esta rotina atualiza valores nas tabelas dos objetos e de uma flag para informar
+;		o programa de que houve uma colisao entre um meteoro e o missil
+;************************************************************************************
+houve_colisao_met_missil:
+	PUSH R1
+	PUSH R7
+	MOV R7, 1
+	MOV R1, [R0]
+	MOV [R1+10], R7
+	MOV [DEF_MISSIL+4], R7
+	MOV [DEF_MISSIL+6], R7
+	POP R7
+	POP R1
+	RET
+	
+	
+delay_grande:		;4 ciclos do ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+	CALL ciclo_atraso_imagens_ecra
+	Ret
